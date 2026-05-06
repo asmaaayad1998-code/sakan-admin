@@ -1,0 +1,236 @@
+<!DOCTYPE html>  <html lang="ar" dir="rtl">  
+<head>  
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+    <title>لوحة سكن - نسخة مراسلة الترشيحات</title>  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>  
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>  
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>  
+
+<style>  
+    :root { --primary: #8e735b; --bg: #f4f7f6; }  
+    body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); padding: 15px; text-align: center; direction: rtl; }  
+    .box { max-width: 650px; background: white; padding: 20px; margin: 10px auto; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }  
+    .stats-container { display: flex; justify-content: space-around; gap: 10px; max-width: 650px; margin: 0 auto 15px; }  
+    .stat-card { background: white; padding: 15px; border-radius: 10px; flex: 1; border-top: 4px solid var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }  
+    .stat-card p { margin: 5px 0 0; font-size: 1.4em; font-weight: bold; color: var(--primary); }  
+    input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-family: inherit; }  
+    button { padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; border: none; transition: 0.3s; }  
+    .view-btn { background: #5cb85c; color: white; }  
+    .match-btn { background: #f0ad4e; color: white; margin: 0 5px; }  
+    .wa-link { background: #25d366; color: white; text-decoration: none; padding: 8px 12px; border-radius: 8px; display: inline-block; font-size: 0.85em; font-weight: bold; border: none; cursor: pointer; }  
+    .user-card { background: white; border-right: 6px solid var(--primary); padding: 20px; margin: 15px auto; border-radius: 10px; text-align: right; max-width: 650px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }  
+    .status-tag { font-size: 0.7em; padding: 2px 6px; border-radius: 4px; background: #eee; color: #666; margin-right: 5px; border: 1px solid #ccc; }  
+    #detailsPage, #dashboardSection { display: none; }  
+    .detail-item { border-bottom: 1px solid #eee; padding: 12px 0; text-align: right; }  
+    .detail-item b { color: var(--primary); width: 140px; display: inline-block; }  
+    .match-result-box { margin-top: 15px; padding: 10px; background: #fffde7; border: 1px dashed #fbc02d; border-radius: 8px; display: none; }  
+    .match-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }  
+</style>
+
+</head>  
+<body>  <div id="loginSection" class="box">  
+    <h2 style="color: var(--primary);">لوحة تحكم سكن</h2>  
+    <input type="email" id="emailInput" placeholder="الايميل">  
+    <input type="password" id="passInput" placeholder="كلمة السر">  
+    <button onclick="handleLogin()" style="background: var(--primary); color:white; width:100%;">دخول</button>  
+</div>  
+
+<div id="dashboardSection">  
+    <div class="stats-container">  
+        <div class="stat-card"><h4>إجمالي</h4><p id="totalCount">0</p></div>  
+        <div class="stat-card"><h4>إناث</h4><p id="femaleCount">0</p></div>  
+        <div class="stat-card"><h4>ذكور</h4><p id="maleCount">0</p></div>  
+    </div>  
+    <div class="box">  
+        <input type="text" id="searchInput" onkeyup="filterData()" placeholder="🔍 ابحث بالاسم أو رقم الهاتف...">  
+        <div style="display: flex; gap: 5px;">  
+            <select id="govFilter" onchange="filterData()"><option value="الكل">كل المحافظات</option></select>  
+            <select id="statusFilter" onchange="filterData()">  
+                <option value="الكل">كل الحالات</option>  
+                <option value="جديد">جديد ✨</option>  
+                <option value="قيد المراجعة">قيد المراجعة ⏳</option>  
+                <option value="تم التوفيق">تم التوفيق ✅</option>  
+            </select>  
+        </div>  
+        <button onclick="fetchData()" style="background: #5bc0de; color:white; width:100%; margin-top:5px;">تحديث 🔄</button>  
+    </div>  
+    <div id="displayArea"></div>  
+</div>  
+
+<div id="detailsPage" class="box">  
+    <h2 style="color: var(--primary); border-bottom: 3px solid var(--primary); padding-bottom: 10px;">التفاصيل</h2>  
+    <div id="fullDetailsContent"></div>  
+    <div id="whatsappDetailArea" style="margin-top: 15px;"></div>  
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #ddd;">  
+        <textarea id="adminNotes" rows="3" placeholder="سجلي ملاحظاتك هنا..."></textarea>  
+        <select id="statusSelect">  
+            <option value="جديد">جديد ✨</option>  
+            <option value="قيد المراجعة">قيد المراجعة ⏳</option>  
+            <option value="تم التوفيق">تم التوفيق ✅</option>  
+            <option value="مرفوض">مرفوض ❌</option>  
+        </select>  
+        <button onclick="updateStatusAndNotes()" style="background: var(--primary); color:white; margin-top:5px; width:100%;">حفظ التغييرات</button>  
+    </div>  
+    <button onclick="goBack()" style="background: #6c757d; color:white; width:100%; margin-top: 20px;">⬅️ رجوع</button>  
+</div>  
+
+<script>  
+    const config = {  
+        apiKey: "AIzaSyAlqgVEqEKY9gaiE6SzyNCi20YgDzS-qvs",  
+        authDomain: "sakan-7d552.firebaseapp.com",  
+        projectId: "sakan-7d552",  
+        storageBucket: "sakan-7d552.firebasestorage.app",  
+        messagingSenderId: "949917687911",  
+        appId: "1:949917687911:web:2f84e4ca3e7183087674c2"  
+    };  
+    firebase.initializeApp(config);  
+    const db = firebase.firestore();  
+    const auth = firebase.auth();  
+    let allUsers = [];  
+    let currentEditingId = null;  
+
+    // دالة المراسلة المعدلة (ترسل النص بشكل صحيح)  
+    function openWA(phone, messageText = "") {  
+        let p = String(phone).replace(/\D/g, '');   
+        if (p.startsWith('0')) p = '2' + p;   
+        else if (!p.startsWith('2')) p = '20' + p;   
+          
+        // إضافة النص المشفر للرابط  
+        let url = `https://api.whatsapp.com/send?phone=${p}`;  
+        if (messageText) {  
+            url += `&text=${encodeURIComponent(messageText)}`;  
+        }  
+        window.open(url, '_blank');  
+    }  
+
+    function handleLogin() {  
+        auth.signInWithEmailAndPassword(document.getElementById('emailInput').value.trim(), document.getElementById('passInput').value.trim()).then(() => {  
+            document.getElementById('loginSection').style.display = 'none';  
+            document.getElementById('dashboardSection').style.display = 'block';  
+            fetchData();  
+        }).catch((err) => alert("خطأ في الدخول"));  
+    }  
+
+    function fetchData() {  
+        db.collection("users").get().then((qs) => {  
+            allUsers = [];  
+            const govSet = new Set();  
+            let m = 0, f = 0;  
+            qs.forEach(doc => {  
+                const data = { id: doc.id, ...doc.data() };  
+                allUsers.push(data);  
+                const info = data.applicant || {};  
+                if(info.governorate) govSet.add(info.governorate);  
+                if(info.gender === "ذكر") m++;  
+                if(info.gender === "أنثى" || info.gender === "انثى") f++;  
+            });  
+            document.getElementById('totalCount').innerText = allUsers.length;  
+            document.getElementById('maleCount').innerText = m;  
+            document.getElementById('femaleCount').innerText = f;  
+            updateGovFilter(govSet);  
+            renderUsers(allUsers);  
+        });  
+    }  
+
+    function updateGovFilter(govs) {  
+        const s = document.getElementById('govFilter');  
+        s.innerHTML = '<option value="الكل">كل المحافظات</option>';  
+        govs.forEach(g => s.innerHTML += `<option value="${g}">${g}</option>`);  
+    }  
+
+    function renderUsers(data) {  
+        const area = document.getElementById('displayArea');  
+        area.innerHTML = data.length === 0 ? "لا توجد نتائج" : "";  
+        data.forEach(user => {  
+            const info = user.applicant || {};  
+            const status = user.status || "جديد";  
+            const gColor = info.gender === "ذكر" ? "#007bff" : "#e83e8c";  
+              
+            area.innerHTML += `  
+                <div class="user-card">  
+                    <span class="status-tag">${status}</span>  
+                    <b style="color:${gColor}">👤 ${info.name || "غير مسجل"}</b><br>  
+                    <small>📍 ${info.governorate} | 🎂 ${info.age} سنة</small>  
+                    <div style="margin-top:12px;">  
+                        <button class="view-btn" onclick="showDetails('${user.id}')">📄 البيانات</button>  
+                        <button class="match-btn" onclick="findMatch('${user.id}')">🔍 ترشيح</button>  
+                        <button onclick="openWA('${info.phone || info.whatsapp}')" class="wa-link">واتساب 📱</button>  
+                    </div>  
+                    <div id="res-${user.id}" class="match-result-box"></div>  
+                </div>`;  
+        });  
+    }  
+
+    function findMatch(id) {  
+        const currentObj = allUsers.find(u => u.id === id);  
+        const target = currentObj.applicant || {};  
+        const matches = allUsers.filter(u => {  
+            const m = u.applicant || {};  
+            const mStatus = u.status || "جديد";  
+            return u.id !== id && m.governorate === target.governorate && m.gender !== target.gender &&   
+                   Math.abs(parseInt(m.age) - parseInt(target.age)) <= 7 &&   
+                   (mStatus !== "تم التوفيق" && mStatus !== "قيد المراجعة");  
+        });  
+        const resDiv = document.getElementById(`res-${id}`);  
+        resDiv.style.display = "block";  
+        resDiv.innerHTML = "<b>✅ ترشيحات متاحة:</b><br>";  
+          
+        matches.forEach(m => {  
+            // صياغة الرسالة اللي هتظهر في الواتساب  
+            const msg = `أهلاً يا ${m.applicant.name}، أنا أسماء من سكن. فيه طلب مناسب ليكي:\n- الاسم: ${target.name}\n- السن: ${target.age}\n- المحافظة: ${target.governorate}\n- التعليم: ${target.education || '---'}\nإيه رأيك؟`;  
+              
+            resDiv.innerHTML += `  
+                <div class="match-item">  
+                    <span>• ${m.applicant.name}</span>  
+                    <div class="mini-btn-group">  
+                        <button onclick="openWA('${m.applicant.phone}', '${msg.replace(/'/g, "\\'")}')" class="wa-link" style="padding:4px 8px; font-size:0.7em;">إرسال البيانات 📱</button>  
+                    </div>  
+                </div>`;  
+        });  
+    }  
+
+    function showDetails(userId) {  
+        currentEditingId = userId;  
+        const user = allUsers.find(u => u.id === userId);  
+        const info = user.applicant || {};  
+        document.getElementById('statusSelect').value = user.status || "جديد";  
+        document.getElementById('adminNotes').value = user.notes || "";  
+        document.getElementById('fullDetailsContent').innerHTML = `  
+            <div class="detail-item"><b>الاسم:</b> ${info.name}</div>  
+            <div class="detail-item"><b>السن:</b> ${info.age}</div>  
+            <div class="detail-item"><b>المحافظة:</b> ${info.governorate}</div>  
+            <div class="detail-item"><b>الهاتف:</b> ${info.phone}</div>  
+            <div class="detail-item"><b>الحالة:</b> <span style="color:red">${user.status || "جديد"}</span></div>  
+        `;  
+        document.getElementById('whatsappDetailArea').innerHTML = `<button onclick="openWA('${info.phone || info.whatsapp}')" class="wa-link" style="width:100%; text-align:center;">مراسلة الآن 💬</button>`;  
+        document.getElementById('dashboardSection').style.display = 'none';  
+        document.getElementById('detailsPage').style.display = 'block';  
+    }  
+
+    function updateStatusAndNotes() {  
+        db.collection("users").doc(currentEditingId).update({  
+            status: document.getElementById('statusSelect').value,  
+            notes: document.getElementById('adminNotes').value  
+        }).then(() => { fetchData(); goBack(); });  
+    }  
+
+    function filterData() {  
+        const s = document.getElementById('searchInput').value.toLowerCase();  
+        const g = document.getElementById('govFilter').value;  
+        const st = document.getElementById('statusFilter').value;  
+        const filtered = allUsers.filter(u => {  
+            const info = u.applicant || {};  
+            const matchesSearch = (info.name || "").toLowerCase().includes(s) || (info.phone || "").includes(s);  
+            return matchesSearch && (g === "الكل" || info.governorate === g) && (st === "الكل" || (u.status || "جديد") === st);  
+        });  
+        renderUsers(filtered);  
+    }  
+
+    function goBack() {  
+        document.getElementById('detailsPage').style.display = 'none';  
+        document.getElementById('dashboardSection').style.display = 'block';  
+    }  
+</script>
+
+</body>  
+</html>
